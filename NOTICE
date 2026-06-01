@@ -1,0 +1,20 @@
+CardioConsult
+Copyright 2026 Timmy-zhu12
+
+This product includes software developed for the CardioConsult/GDC Shanghai project.
+
+License scope:
+The Apache License 2.0 in this repository applies to original source code, scripts,
+UI code, documentation, and project configuration authored for this repository.
+
+Exclusions:
+The license does not grant rights to third-party model weights, GGUF files, mobile
+or desktop SDKs, operating system SDKs, ultrasound software, medical datasets
+(including CAMUS, EchoNet-Dynamic, HMC-QU, EchoXFlow, or other clinical image data),
+third-party trademarks, app store assets, or patient/teaching data supplied by users.
+Those materials remain governed by their own licenses, terms, or institutional approvals.
+
+Medical-use notice:
+CardioConsult is a medical education and research support prototype. It is not
+cleared or intended for independent clinical diagnosis, treatment decisions, or
+emergency use.
