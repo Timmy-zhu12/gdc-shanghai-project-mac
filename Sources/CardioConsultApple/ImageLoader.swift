@@ -1,12 +1,19 @@
 import Foundation
+import AVFoundation
 import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
 
 enum StudyInputLoader {
     static let supportedExtensions: Set<String> = [
-        "png", "jpg", "jpeg", "bmp", "tif", "tiff", "dcm", "dicom", "dcom"
+        "png", "jpg", "jpeg", "bmp", "tif", "tiff", "webp", "heic", "heif",
+        "gif", "apng", "mp4", "m4v", "mov", "avi", "mkv", "webm", "wmv",
+        "mpg", "mpeg", "3gp", "cine", "dcm", "dicom", "dcom"
     ]
+    private static let videoExtensions: Set<String> = [
+        "mp4", "m4v", "mov", "avi", "mkv", "webm", "wmv", "mpg", "mpeg", "3gp", "cine"
+    ]
+    private static let maxDynamicFrames = 24
 
     static func load(urls: [URL]) throws -> [LoadedStudyImage] {
         var output: [LoadedStudyImage] = []
@@ -30,8 +37,10 @@ enum StudyInputLoader {
                 if ["dcm", "dicom", "dcom"].contains(ext) {
                     let data = try Data(contentsOf: url)
                     output.append(contentsOf: try DicomDecoder.decode(data: data, fileName: url.lastPathComponent))
+                } else if videoExtensions.contains(ext) {
+                    output.append(contentsOf: try loadVideoFrames(url: url))
                 } else {
-                    output.append(try loadRaster(url: url))
+                    output.append(contentsOf: try loadRasterFrames(url: url))
                 }
             } catch {
                 errors.append(error.localizedDescription)
@@ -44,18 +53,71 @@ enum StudyInputLoader {
         return output
     }
 
-    private static func loadRaster(url: URL) throws -> LoadedStudyImage {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+    private static func loadRasterFrames(url: URL) throws -> [LoadedStudyImage] {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
             throw CardioError.imageDecodeFailed(url.lastPathComponent)
         }
-        return LoadedStudyImage(
-            fileName: url.lastPathComponent,
-            frameIndex: 0,
-            image: try RGBImage(cgImage: cgImage),
-            sourceType: "raster",
-            metadata: [:]
-        )
+        let sourceCount = max(CGImageSourceGetCount(source), 1)
+        let frameCount = min(sourceCount, maxDynamicFrames)
+        var frames: [LoadedStudyImage] = []
+        for index in 0..<frameCount {
+            guard let cgImage = CGImageSourceCreateImageAtIndex(source, index, nil) else {
+                continue
+            }
+            frames.append(
+                LoadedStudyImage(
+                    fileName: url.lastPathComponent,
+                    frameIndex: index,
+                    image: try RGBImage(cgImage: cgImage),
+                    sourceType: sourceCount > 1 ? "animated-raster" : "raster",
+                    metadata: [:]
+                )
+            )
+        }
+        if frames.isEmpty {
+            throw CardioError.imageDecodeFailed(url.lastPathComponent)
+        }
+        return frames
+    }
+
+    private static func loadVideoFrames(url: URL) throws -> [LoadedStudyImage] {
+        let asset = AVAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+
+        let duration = CMTimeGetSeconds(asset.duration)
+        let frameCount: Int
+        if duration.isFinite && duration > 0 {
+            frameCount = min(max(Int(duration / 0.5) + 1, 2), maxDynamicFrames)
+        } else {
+            frameCount = 1
+        }
+        var frames: [LoadedStudyImage] = []
+        for index in 0..<frameCount {
+            let seconds: Double
+            if frameCount <= 1 || !duration.isFinite || duration <= 0 {
+                seconds = 0
+            } else {
+                seconds = duration * Double(index) / Double(frameCount - 1)
+            }
+            let time = CMTime(seconds: seconds, preferredTimescale: 600)
+            let cgImage = try generator.copyCGImage(at: time, actualTime: nil)
+            frames.append(
+                LoadedStudyImage(
+                    fileName: url.lastPathComponent,
+                    frameIndex: index,
+                    image: try RGBImage(cgImage: cgImage),
+                    sourceType: "video",
+                    metadata: [:]
+                )
+            )
+        }
+        if frames.isEmpty {
+            throw CardioError.imageDecodeFailed("\(url.lastPathComponent): no readable video frames")
+        }
+        return frames
     }
 }
 
