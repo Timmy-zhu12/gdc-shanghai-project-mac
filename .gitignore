@@ -1,0 +1,21 @@
+.DS_Store
+.build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.ipa
+*.app
+*.dSYM
+
+# Local model/config/report artifacts
+Models/*.gguf
+Models/*.bin
+Exports/*
+!Exports/.gitkeep
+Config.local.json
+
+# Xcode local signing
+*.mobileprovision
+*.p12
+*.cer
+
