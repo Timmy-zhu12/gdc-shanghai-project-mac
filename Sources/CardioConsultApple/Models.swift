@@ -43,6 +43,7 @@ struct StudyAnalysis: Hashable {
     let meanBMode: [Double]
     let meanFlow: [Double]
     let contractilityProxy: Double
+    let contractilityFractionProxy: Double
     let coverageWarning: String
     let featureSummary: String
 
@@ -50,7 +51,7 @@ struct StudyAnalysis: Hashable {
         let b = meanBMode.map { String(format: "%.4f", $0) }.joined(separator: ", ")
         let f = meanFlow.map { String(format: "%.4f", $0) }.joined(separator: ", ")
         return """
-        views=\(viewCount), files_or_frames=\(inputCount), systole=\(systoleCount), diastole=\(diastoleCount), contractility_proxy=\(String(format: "%.4f", contractilityProxy))
+        views=\(viewCount), files_or_frames=\(inputCount), systole=\(systoleCount), diastole=\(diastoleCount), contractility_proxy=\(String(format: "%.4f", contractilityProxy)), contractility_fraction_proxy=\(String(format: "%.4f", contractilityFractionProxy))
         B-mode mean features=[\(b)]
         Doppler mean features=[\(f)]
         """

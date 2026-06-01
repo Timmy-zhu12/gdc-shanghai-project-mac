@@ -9,9 +9,9 @@ enum StudyAnalyzer {
         ("PSAX-MV", ["psax_mv", "mitral", "二尖瓣短轴"]),
         ("PSAX-PM", ["psax_pm", "papillary", "乳头肌短轴"]),
         ("PSAX-APEX", ["psax_apex", "apex_short", "心尖短轴"]),
-        ("A4C", ["a4c", "apical_4", "four_chamber", "心尖四腔"]),
+        ("A4C", ["a4c", "apical_4", "four_chamber", "4ch", "4_chamber", "心尖四腔"]),
         ("A5C", ["a5c", "apical_5", "five_chamber", "心尖五腔"]),
-        ("A2C", ["a2c", "apical_2", "two_chamber", "心尖二腔"]),
+        ("A2C", ["a2c", "apical_2", "two_chamber", "2ch", "2_chamber", "心尖二腔"]),
         ("A3C", ["a3c", "apical_3", "three_chamber", "心尖三腔"]),
         ("SUBCOSTAL-4C", ["subcostal", "subxiphoid", "剑突下", "肋下"]),
         ("IVC", ["ivc", "下腔静脉"]),
@@ -41,9 +41,10 @@ enum StudyAnalyzer {
         let views = Set(provisional.map(\.view))
         let systole = provisional.filter { $0.phase == "systole" }.count
         let diastole = provisional.filter { $0.phase == "diastole" }.count
-        let meanB = meanFeatures(provisional.map(\.bModeFeatures), count: 10)
+        let meanB = meanFeatures(provisional.map(\.bModeFeatures), count: 14)
         let meanF = meanFeatures(provisional.map(\.flowFeatures), count: 10)
         let contractility = computeContractilityProxy(provisional)
+        let contractilityFraction = computeContractilityFractionProxy(provisional)
         let warning: String
         if views.count > 12 {
             warning = "输入超过 12 个体位标签，已按全部文件聚合；建议按标准 12 体位整理。"
@@ -52,7 +53,7 @@ enum StudyAnalyzer {
         } else {
             warning = ""
         }
-        let summary = buildFeatureSummary(frames: provisional, meanB: meanB, meanF: meanF, contractility: contractility, warning: warning)
+        let summary = buildFeatureSummary(frames: provisional, meanB: meanB, meanF: meanF, contractility: contractility, contractilityFraction: contractilityFraction, warning: warning)
 
         return StudyAnalysis(
             frames: provisional,
@@ -63,6 +64,7 @@ enum StudyAnalyzer {
             meanBMode: meanB,
             meanFlow: meanF,
             contractilityProxy: contractility,
+            contractilityFractionProxy: contractilityFraction,
             coverageWarning: warning,
             featureSummary: summary
         )
@@ -101,17 +103,57 @@ enum StudyAnalyzer {
         }
 
         let denom = max(Double(count), 1)
+        let varianceFeature = (variance / denom).clamped01
+        let dxFeature = (dxMean / denom).clamped01
+        let dyFeature = (dyMean / denom).clamped01
+        let gradFeature = (gradMean / denom).clamped01
+        let edgeFeature = (Double(edgePixels) / denom).clamped01
+        let dogMean = dog.average.clamped01
+        var speckleResidual = 0.0
+        var dogVariance = 0.0
+        var leftSum = 0.0
+        var rightSum = 0.0
+        var leftCount = 0
+        var rightCount = 0
+        for y in 0..<analysisSize {
+            for x in 0..<analysisSize {
+                let index = y * analysisSize + x
+                let value = normalized[index]
+                speckleResidual += abs(value - dog[index])
+                let dogDiff = dog[index] - dogMean
+                dogVariance += dogDiff * dogDiff
+                if x < analysisSize / 2 {
+                    leftSum += value
+                    leftCount += 1
+                } else {
+                    rightSum += value
+                    rightCount += 1
+                }
+            }
+        }
+        let pixelDenom = max(Double(normalized.count), 1.0)
+        speckleResidual = (speckleResidual / pixelDenom).clamped01
+        dogVariance /= pixelDenom
+        let contrastGain = min(max(dogVariance / max(varianceFeature, 0.000001), 0.0), 3.0)
+        let directionalAnisotropy = min(max(abs(dxFeature - dyFeature) / max(dxFeature + dyFeature, 0.001), 0.0), 1.0)
+        let leftMean = leftSum / max(Double(leftCount), 1.0)
+        let rightMean = rightSum / max(Double(rightCount), 1.0)
+        let symmetryProxy = (1.0 - abs(leftMean - rightMean)).clamped01
         return [
             mean.clamped01,
-            (variance / denom).clamped01,
-            (dxMean / denom).clamped01,
-            (dyMean / denom).clamped01,
-            (gradMean / denom).clamped01,
-            (Double(edgePixels) / denom).clamped01,
+            varianceFeature,
+            dxFeature,
+            dyFeature,
+            gradFeature,
+            edgeFeature,
             normalizedEntropy(histogram),
-            dog.average.clamped01,
+            dogMean,
             (Double(dog.filter { $0 > 0.65 }.count) / Double(max(dog.count, 1))).clamped01,
-            chamberAreaProxy(normalized)
+            chamberAreaProxy(normalized),
+            speckleResidual,
+            contrastGain,
+            directionalAnisotropy,
+            symmetryProxy
         ]
     }
 
@@ -407,9 +449,22 @@ enum StudyAnalyzer {
             guard let maxD = diastolic.max(), let minS = systolic.min() else {
                 return nil
             }
-            return maxD - minS
+            return max(maxD - minS, 0)
         }
         return deltas.isEmpty ? 0 : deltas.average.clamped01
+    }
+
+    private static func computeContractilityFractionProxy(_ frames: [FrameAnalysis]) -> Double {
+        let groups = Dictionary(grouping: frames, by: \.view)
+        let fractions: [Double] = groups.values.compactMap { group in
+            let systolic = group.filter { $0.phase == "systole" }.map(\.chamberAreaProxy)
+            let diastolic = group.filter { $0.phase == "diastole" }.map(\.chamberAreaProxy)
+            guard let maxD = diastolic.max(), let minS = systolic.min(), maxD > 0.001 else {
+                return nil
+            }
+            return (max(maxD - minS, 0) / maxD).clamped01
+        }
+        return fractions.isEmpty ? 0 : fractions.average.clamped01
     }
 
     private static func meanFeatures(_ features: [[Double]], count: Int) -> [Double] {
@@ -423,11 +478,11 @@ enum StudyAnalyzer {
         return mean.map { $0 / Double(features.count) }
     }
 
-    private static func buildFeatureSummary(frames: [FrameAnalysis], meanB: [Double], meanF: [Double], contractility: Double, warning: String) -> String {
+    private static func buildFeatureSummary(frames: [FrameAnalysis], meanB: [Double], meanF: [Double], contractility: Double, contractilityFraction: Double, warning: String) -> String {
         let views = Set(frames.map(\.view)).sorted().joined(separator: ", ")
         let phaseText = frames.prefix(24).map { "\($0.loaded.displayName):\($0.phase)/\($0.view)" }.joined(separator: ", ")
         return """
-        输入 \(frames.count) 个文件/帧，覆盖体位: \(views). 相位识别: \(phaseText). 收缩-舒张腔室面积代理差值: \(contractility.f3). B-mode 边缘密度=\(meanB[safe: 5, fallback: 0].f3), 纹理熵=\(meanB[safe: 6, fallback: 0].f3); Doppler 活跃区比例=\(meanF[safe: 4, fallback: 0].f3), 湍流代理=\(meanF[safe: 5, fallback: 0].f3), 涡量代理=\(meanF[safe: 8, fallback: 0].f3). \(warning)
+        输入 \(frames.count) 个文件/帧，覆盖体位: \(views). 相位识别: \(phaseText). 收缩-舒张腔室面积代理差值: \(contractility.f3); contractility_fraction_proxy=\(contractilityFraction.f3). B-mode 边缘密度=\(meanB[safe: 5, fallback: 0].f3), 纹理熵=\(meanB[safe: 6, fallback: 0].f3); Doppler 活跃区比例=\(meanF[safe: 4, fallback: 0].f3), 湍流代理=\(meanF[safe: 5, fallback: 0].f3), 涡量代理=\(meanF[safe: 8, fallback: 0].f3). \(warning)
         """
         .trimmingCharacters(in: .whitespacesAndNewlines)
     }

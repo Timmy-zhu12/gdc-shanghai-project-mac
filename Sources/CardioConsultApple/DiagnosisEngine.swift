@@ -47,6 +47,12 @@ enum DiagnosisEngine {
         let signed = f[safe: 3, fallback: 0.5]
         let enoughPhase = study.systoleCount >= 1 && study.diastoleCount >= 1
         let broadCoverage = study.viewCount >= 6
+        let lowEFCalibration = LowEFCalibration.estimate(study: study)
+        let apicalLVView = hasA4C || hasA2C || hasA3C
+        let calibratedLowEFSignal = enoughPhase && apicalLVView && lowEFCalibration.positive
+        let motionLowEFSignal = enoughPhase &&
+            study.contractilityFractionProxy < 0.30 &&
+            chamberProxy > 0.025
 
         let label: String
         let rationale: String
@@ -71,9 +77,9 @@ enum DiagnosisEngine {
         } else if dopplerActive > 0.11 && hasPSAXAV && (turbulence > 0.035 || vorticity > 0.035) {
             label = "肺动脉瓣轻度反流"
             rationale = "主动脉瓣短轴层面附近的流场活跃和涡量代理升高，在当前简化规则中对应肺动脉瓣反流教学标签。"
-        } else if enoughPhase && contractility < 0.035 && chamberProxy > 0.55 {
+        } else if calibratedLowEFSignal || motionLowEFSignal || (enoughPhase && contractility < 0.035 && chamberProxy > 0.035) {
             label = "左心室收缩功能减低"
-            rationale = "收缩态与舒张态腔室面积代理差值偏低，提示教学参考下的收缩幅度不足。"
+            rationale = "PC accuracy baseline: \(lowEFCalibration.compactText), contractility_fraction_proxy=\(study.contractilityFractionProxy.f3), chamber_area_proxy=\(chamberProxy.f3)."
         } else if edgeDensity > 0.30 || entropy > 0.74 {
             label = "节段性室壁运动异常"
             rationale = "B-mode 差分矩阵边缘密度或纹理熵偏高，且未达到明确瓣膜反流阈值，教学规则归入室壁运动异常。"
@@ -103,13 +109,15 @@ enum DiagnosisEngine {
         let judgment = judgment ?? classifyTeachingCondition(study)
         let b = study.meanBMode
         let f = study.meanFlow
+        let lowEFCalibration = LowEFCalibration.estimate(study: study)
+        let calibrationText = judgment.label == "左心室收缩功能减低" ? " \(lowEFCalibration.compactText)." : ""
         var phasePhrase = "系统自动识别出 \(study.diastoleCount) 个舒张态、\(study.systoleCount) 个收缩态"
         if study.systoleCount == 0 || study.diastoleCount == 0 {
             phasePhrase += "，收缩/舒张配对不足"
         }
         let warning = study.coverageWarning.isEmpty ? "" : " \(study.coverageWarning)"
         return """
-        教学参考病症判断：\(judgment.label)。本次输入包含 \(study.inputCount) 个文件/帧，覆盖约 \(study.viewCount) 个体位，\(phasePhrase)；判断依据为：\(judgment.rationale)B-mode 边缘密度 \(b[safe: 5, fallback: 0].f3)、纹理熵 \(b[safe: 6, fallback: 0].f3)、收缩舒张腔室面积代理差值 \(study.contractilityProxy.f3)；Color Doppler 活跃区比例 \(f[safe: 4, fallback: 0].f3)、湍流代理 \(f[safe: 5, fallback: 0].f3)、涡量代理 \(f[safe: 8, fallback: 0].f3)。综合当前体位覆盖、相位识别和边缘计算特征，本次教学参考置信度为\(judgment.confidence)。\(warning)该结论是为了医学教学和算法演示而给出的明确参考判断，不作为临床最终诊断、治疗建议或医嘱；正式判断仍需结合完整标准切面、DICOM 标尺、连续动态帧、病史、体征和超声医师报告。
+        教学参考病症判断：\(judgment.label)。本次输入包含 \(study.inputCount) 个文件/帧，覆盖约 \(study.viewCount) 个体位，\(phasePhrase)；判断依据为：\(judgment.rationale)B-mode 边缘密度 \(b[safe: 5, fallback: 0].f3)、纹理熵 \(b[safe: 6, fallback: 0].f3)、收缩舒张腔室面积代理差值 \(study.contractilityProxy.f3)、contractility_fraction_proxy \(study.contractilityFractionProxy.f3)；Color Doppler 活跃区比例 \(f[safe: 4, fallback: 0].f3)、湍流代理 \(f[safe: 5, fallback: 0].f3)、涡量代理 \(f[safe: 8, fallback: 0].f3)。综合当前体位覆盖、相位识别和边缘计算特征，本次教学参考置信度为\(judgment.confidence)。\(calibrationText)\(warning)该结论是为了医学教学和算法演示而给出的明确参考判断，不作为临床最终诊断、治疗建议或医嘱；正式判断仍需结合完整标准切面、DICOM 标尺、连续动态帧、病史、体征和超声医师报告。
         """
     }
 

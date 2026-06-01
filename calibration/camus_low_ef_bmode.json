@@ -1,0 +1,96 @@
+{
+  "name": "CAMUS_BMODE_LOW_EF_PROXY_V1",
+  "target": "low_contractility_proxy",
+  "intended_use": "offline teaching support; flags reduced left-ventricular systolic function when B-mode features resemble EF<50 CAMUS cases",
+  "source_features_csv": "D:/cardioconsult_dense_validation/results/CAMUS/features.csv",
+  "training_unit": "case_level_mean_features",
+  "positive_definition": "CAMUS EF < 50 -> low_contractility_proxy",
+  "features": [
+    "bmode_0",
+    "bmode_1",
+    "bmode_2",
+    "bmode_3",
+    "bmode_4",
+    "bmode_5",
+    "bmode_6",
+    "bmode_7",
+    "bmode_8",
+    "bmode_9",
+    "bmode_10",
+    "bmode_11",
+    "bmode_12",
+    "bmode_13"
+  ],
+  "means": [
+    0.3439935178917466,
+    0.12028905578029875,
+    0.025798437900389635,
+    0.02456265047501881,
+    0.040211958249455095,
+    0.0737082140777824,
+    0.7069971181396282,
+    0.4954215065553333,
+    0.14808516364820076,
+    0.07639642825920807,
+    0.07467716333877404,
+    1.341234923442205,
+    0.033632082326372485,
+    0.7312120197614035
+  ],
+  "scales": [
+    0.03208239924941736,
+    0.01302439280098024,
+    0.0025158036026431928,
+    0.0021835692627131024,
+    0.003524361836146934,
+    0.015493536583794354,
+    0.02052622833382595,
+    0.009740157445858313,
+    0.00884501453211464,
+    0.061894160123964787,
+    0.017609723816004026,
+    0.13348164384138855,
+    0.01745744798507828,
+    0.0417555305063175
+  ],
+  "coefficients": [
+    0.622740532672364,
+    -0.013848509189125145,
+    0.21198496607711712,
+    -0.23688950832389055,
+    0.1975460846932727,
+    0.0613060323813922,
+    0.7014784634828846,
+    1.4841314955297402,
+    0.20656215606528236,
+    0.24487943160170766,
+    0.7444971896053327,
+    0.48952155216981214,
+    -0.5426316801524845,
+    1.0054161135064559
+  ],
+  "intercept": 0.30681757902460743,
+  "threshold": 0.27,
+  "cross_validation": {
+    "n": 250,
+    "cv": "StratifiedGroupKFold(n_splits=5, groups=patient_id)",
+    "auc": 0.6882352941176471,
+    "accuracy": 0.728,
+    "balanced_accuracy": 0.6345588235294117,
+    "positive_f1": 0.8172043010752689,
+    "confusion_matrix_labels": [
+      "normal",
+      "low_contractility_proxy"
+    ],
+    "confusion_matrix": [
+      [
+        30,
+        50
+      ],
+      [
+        18,
+        152
+      ]
+    ]
+  }
+}
