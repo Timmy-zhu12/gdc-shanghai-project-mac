@@ -1,6 +1,6 @@
-# CardioConsult Apple Edition
+# CardioConsult Apple 版中文说明
 
-CardioConsult Apple Edition 是基于 PC 版功能重新制作的 iPhone / macOS 版本。项目目标是尽量保留 PC 端完整工作流：导入脱敏心脏超声 PNG / DICOM / DCOM 文件，在本机完成边缘计算，自动识别体位与收缩/舒张相位，并输出明确到病症名称的中文教学参考判断。
+CardioConsult Apple 版是基于 PC 版功能重新制作的 iPhone / macOS 版本。项目目标是尽量保留 PC 端完整工作流：导入脱敏心脏超声 PNG / DICOM / DCOM 文件，在本机完成边缘计算，自动识别体位与收缩/舒张相位，并输出明确到病症名称的中文教学参考判断。
 
 > 医学安全声明：本项目仅用于医学教学、比赛演示和算法验证，不作为临床最终诊断、治疗建议或医嘱。正式医学判断仍需结合完整标准切面、DICOM 标尺、连续动态帧、病史、体征和超声医师报告。
 
@@ -423,7 +423,7 @@ vy = speed * sin(theta)
 3. 展示手机端本地边缘计算和规则后备诊断。
 4. 说明 Gemma4 4B 原生后端为后续接入点，模型文件契约与 macOS/PC 保持一致。
 
-## License / 许可证
+## 许可证
 
 本仓库原创代码、脚本、UI、配置与文档采用 Apache License 2.0 发布，详见 [LICENSE](LICENSE)。
 
